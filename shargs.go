@@ -24,8 +24,8 @@ type Word struct {
 	Op bool
 }
 
-// Split splits s into words. Errors are ErrUnclosedQuote and
-// ErrTrailingEscape.
+// Split splits s into words. Errors are ErrUnclosedQuote,
+// ErrTrailingEscape and ErrUnclosedSubst.
 func Split(s string) ([]Word, error) {
 	isWS := func(c rune) bool { return c == ' ' || c == '\t' || c == '\r' || c == '\n' }
 	isQuote := func(c rune) bool { return c == '\'' || c == '"' }
@@ -57,6 +57,7 @@ func Split(s string) ([]Word, error) {
 		quoted := false
 		escapedState := 'a'
 		subst, backtick := 0, false // open $( ... ) and ` ... ` in the word
+		substQuote, substEsc := rune(0), false
 	read:
 		for {
 			c, ok := next()
@@ -122,11 +123,25 @@ func Split(s string) ([]Word, error) {
 				}
 				token = append(token, c)
 				state = escapedState
-			case state == 'a' && ok && (subst > 0 || backtick):
+			case state == 'a' && (subst > 0 || backtick):
+				// kept as written; quotes and escapes only hide ( ) and `
+				if !ok {
+					return nil, ErrUnclosedSubst
+				}
 				token = append(token, c)
 				switch {
+				case substEsc:
+					substEsc = false
+				case c == '\\' && substQuote != '\'':
+					substEsc = true
 				case backtick:
 					backtick = c != '`'
+				case substQuote != 0:
+					if c == substQuote {
+						substQuote = 0
+					}
+				case isQuote(c):
+					substQuote = c
 				case c == '(':
 					subst++
 				case c == ')':
@@ -219,6 +234,7 @@ func StopAtOp() Option {
 var (
 	ErrUnclosedQuote  = errors.New("shargs: no closing quotation")
 	ErrTrailingEscape = errors.New("shargs: no escaped character")
+	ErrUnclosedSubst  = errors.New("shargs: no closing ) or ` of a substitution")
 
 	ErrUnexpectedOp = errors.New("shargs: unexpected operator")
 	ErrOpAtStart    = errors.New("shargs: operator at start")

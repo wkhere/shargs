@@ -69,6 +69,10 @@ shell:
 |---|---|
 | `--tag=$(git describe) ${HOME}/bin` | `--tag=$(git describe)` `${HOME}/bin` |
 | `$(echo x; y) z` | `$(echo x; y)` `z` |
+| `$(echo ")" \)) z` | `$(echo ")" \))` `z` |
+
+Inside them, quotes and escapes are kept too, and a `)` or `` ` `` they
+hide doesn't end the substitution.
 
 That also keeps a Makefile's `$(var)` references whole.
 
@@ -78,6 +82,7 @@ That also keeps a Makefile's `$(var)` references whole.
 |---|---|
 | `ErrUnclosedQuote` | a quote not closed by the end of input |
 | `ErrTrailingEscape` | a backslash at the end of input |
+| `ErrUnclosedSubst` | a `$(` or `` ` `` not closed by the end of input |
 | `ErrUnexpectedOp` | `Fields`: an operator in the input |
 | `ErrOpAtStart` | `Fields` with `StopAtOp`: the input starts with an operator |
 

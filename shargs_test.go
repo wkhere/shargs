@@ -29,6 +29,11 @@ func TestSplit(t *testing.T) {
 		{"a ;# c", []string{"a", "[;]"}},
 		{"-t $(dtag) -i$(inv)x", []string{"-t", "$(dtag)", "-i$(inv)x"}},
 		{"a $(echo x; f (y)) `b; c` d", []string{"a", "$(echo x; f (y))", "`b; c`", "d"}},
+		{`x $(echo ")" ')') y`, []string{"x", `$(echo ")" ')')`, "y"}},
+		{`x $(echo \) "\")") y`, []string{"x", `$(echo \) "\")")`, "y"}},
+		{`x $(echo '\') y`, []string{"x", `$(echo '\')`, "y"}},
+		{"x `echo \\` y` z", []string{"x", "`echo \\` y`", "z"}},
+		{"$((1+2)) x", []string{"$((1+2))", "x"}},
 	} {
 		ws, err := Split(c.in)
 		var got []string
@@ -44,6 +49,8 @@ func TestSplit(t *testing.T) {
 	}
 	for in, want := range map[string]error{
 		"a 'b": ErrUnclosedQuote, `a "b`: ErrUnclosedQuote, `a b\`: ErrTrailingEscape,
+		"a $(b c": ErrUnclosedSubst, "a `b c": ErrUnclosedSubst, `a $(b ")"`: ErrUnclosedSubst,
+		`a $(b \)`: ErrUnclosedSubst,
 	} {
 		if _, err := Split(in); !errors.Is(err, want) {
 			t.Errorf("Split(%q) error = %v; want %v", in, err, want)
