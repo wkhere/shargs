@@ -34,6 +34,17 @@ func TestSplit(t *testing.T) {
 		{`x $(echo '\') y`, []string{"x", `$(echo '\')`, "y"}},
 		{"x `echo \\` y` z", []string{"x", "`echo \\` y`", "z"}},
 		{"$((1+2)) x", []string{"$((1+2))", "x"}},
+		{"$$(git describe) x", []string{"$$(git describe)", "x"}},
+		// substitutions in double quotes
+		{`"$(echo ")")" x`, []string{`$(echo ")")`, "x"}},
+		{`"a $(b c)d" e`, []string{"a $(b c)d", "e"}},
+		{"\"a `echo \"x\"` b\" c", []string{"a `echo \"x\"` b", "c"}},
+		// a $ that is quoted, escaped or in other quotes doesn't open one
+		{`"\$(x" y`, []string{`\$(x`, "y"}}, // shlex keeps \ before $ in "..."
+		{`'$'"(x" y`, []string{"$(x", "y"}},
+		{`$"(x" y`, []string{"$(x", "y"}},
+		{`'$(x' y`, []string{"$(x", "y"}},
+		{`a \$(b`, []string{"a", "$", "[(]", "b"}},
 	} {
 		ws, err := Split(c.in)
 		var got []string
@@ -50,7 +61,7 @@ func TestSplit(t *testing.T) {
 	for in, want := range map[string]error{
 		"a 'b": ErrUnclosedQuote, `a "b`: ErrUnclosedQuote, `a b\`: ErrTrailingEscape,
 		"a $(b c": ErrUnclosedSubst, "a `b c": ErrUnclosedSubst, `a $(b ")"`: ErrUnclosedSubst,
-		`a $(b \)`: ErrUnclosedSubst,
+		`a $(b \)`: ErrUnclosedSubst, `"a $(b" c`: ErrUnclosedSubst, "\"a `b\" c": ErrUnclosedSubst,
 	} {
 		if _, err := Split(in); !errors.Is(err, want) {
 			t.Errorf("Split(%q) error = %v; want %v", in, err, want)

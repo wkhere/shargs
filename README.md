@@ -70,11 +70,13 @@ shell:
 | `--tag=$(git describe) ${HOME}/bin` | `--tag=$(git describe)` `${HOME}/bin` |
 | `$(echo x; y) z` | `$(echo x; y)` `z` |
 | `$(echo ")" \)) z` | `$(echo ")" \))` `z` |
+| `"a $(echo ")")" z` | `a $(echo ")")` `z` |
 
 Inside them, quotes and escapes are kept too, and a `)` or `` ` `` they
-hide doesn't end the substitution.
+hide doesn't end the substitution. The same holds within double quotes.
+A `$` that is single-quoted or escaped doesn't start a substitution.
 
-That also keeps a Makefile's `$(var)` references whole.
+That also keeps a Makefile's `$(var)` and `$$(cmd)` whole.
 
 ## Errors
 
@@ -94,6 +96,8 @@ shargs splits words. It isn't a shell parser, so:
   word's `Text` doesn't tell whether a `$` in it was quoted: `"$HOME"`
   and `'$HOME'` both give `$HOME`.
 - `$'...'` quoting isn't recognized: `$'a\tb'` gives `$a\tb`.
+- In double quotes a backslash escapes only `"` and `\`, as in shlex:
+  `"\$x"` gives `\$x`, where the shell gives `$x`.
 - Operators aren't checked: `|;` is one operator word. A redirection's
   file descriptor stays a separate word: `2>&1` gives `2` `[>&]` `1`.
 - A backslash before a newline keeps the newline instead of joining the

@@ -58,6 +58,8 @@ func Split(s string) ([]Word, error) {
 		escapedState := 'a'
 		subst, backtick := 0, false // open $( ... ) and ` ... ` in the word
 		substQuote, substEsc := rune(0), false
+		// token length after a $ that can open $( ... ), and the state it was in
+		dollar, dollarIn := -1, rune(0)
 	read:
 		for {
 			c, ok := next()
@@ -85,6 +87,9 @@ func Split(s string) ([]Word, error) {
 				default:
 					token, state = []rune{c}, 'a'
 					backtick = c == '`'
+					if c == '$' {
+						dollar, dollarIn = 1, 'a'
+					}
 				}
 			case state == 'o':
 				if ok && isOp(c) {
@@ -101,29 +106,7 @@ func Split(s string) ([]Word, error) {
 					state = 0
 				}
 				continue
-			case isQuote(state):
-				quoted = true
-				switch {
-				case !ok:
-					return nil, ErrUnclosedQuote
-				case c == state:
-					state = 'a'
-				case c == '\\' && state == '"':
-					escapedState, state = state, '\\'
-				default:
-					token = append(token, c)
-				}
-			case state == '\\':
-				if !ok {
-					return nil, ErrTrailingEscape
-				}
-				// in quotes, only the quote itself or '\' may be escaped
-				if isQuote(escapedState) && c != state && c != escapedState {
-					token = append(token, state)
-				}
-				token = append(token, c)
-				state = escapedState
-			case state == 'a' && (subst > 0 || backtick):
+			case (state == 'a' || state == '"') && (subst > 0 || backtick):
 				// kept as written; quotes and escapes only hide ( ) and `
 				if !ok {
 					return nil, ErrUnclosedSubst
@@ -147,6 +130,37 @@ func Split(s string) ([]Word, error) {
 				case c == ')':
 					subst--
 				}
+			case isQuote(state):
+				quoted = true
+				switch {
+				case !ok:
+					return nil, ErrUnclosedQuote
+				case c == state:
+					state = 'a'
+				case c == '\\' && state == '"':
+					escapedState, state = state, '\\'
+				case state == '"' && c == '(' && dollar == len(token) && dollarIn == '"':
+					token = append(token, c)
+					subst = 1
+				case state == '"' && c == '`':
+					token = append(token, c)
+					backtick = true
+				default:
+					token = append(token, c)
+					if state == '"' && c == '$' {
+						dollar, dollarIn = len(token), '"'
+					}
+				}
+			case state == '\\':
+				if !ok {
+					return nil, ErrTrailingEscape
+				}
+				// in quotes, only the quote itself or '\' may be escaped
+				if isQuote(escapedState) && c != state && c != escapedState {
+					token = append(token, state)
+				}
+				token = append(token, c)
+				state = escapedState
 			case state == 'a':
 				switch {
 				case !ok:
@@ -157,7 +171,7 @@ func Split(s string) ([]Word, error) {
 					if len(token) > 0 || quoted {
 						break read
 					}
-				case c == '(' && len(token) > 0 && token[len(token)-1] == '$':
+				case c == '(' && dollar == len(token) && dollarIn == 'a':
 					token = append(token, c)
 					subst = 1
 				case c == '`':
@@ -175,6 +189,9 @@ func Split(s string) ([]Word, error) {
 					escapedState, state = 'a', '\\'
 				default:
 					token = append(token, c) // '#' too: not a comment mid-word
+					if c == '$' {
+						dollar, dollarIn = len(token), 'a'
+					}
 				}
 			}
 		}
